@@ -1,0 +1,31 @@
+{
+  "name": "sakemgmtportal-node",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node ./bin/www"
+  },
+  "dependencies": {
+    "async": "^2.6.0",
+    "body-parser": "~1.17.1",
+    "cookie-parser": "~1.4.3",
+    "cors": "^2.8.4",
+    "debug": "~2.6.3",
+    "express": "~4.15.2",
+    "flexqp-transaction": "^0.3.2",
+    "generate-password": "^1.3.0",
+    "google-auth-library": "^0.12.0",
+    "googleapis": "^23.0.0",
+    "hashmap": "^2.3.0",
+    "js-sha512": "^0.7.1",
+    "jwt-simple": "^0.5.1",
+    "moment": "^2.19.3",
+    "morgan": "~1.8.1",
+    "nodemailer": "^4.4.1",
+    "request": "^2.83.0",
+    "request-promise": "^4.2.2",
+    "serve-favicon": "~2.4.2",
+    "uuid": "^3.2.1",
+    "xero-node": "^2.12.0"
+  }
+}
