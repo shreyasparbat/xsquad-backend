@@ -32,7 +32,7 @@ router.post('/createAccount', async function (req, res, next) {
             var token = jwt.encode(jwtDataLoad, secret);
             // res.json({ "message": "Account created successfully!", session: token, result: result });
             await qp.executeUpdatePromise('update ' + config.schema + '.user set login_token = ? where user_id = ?;', [token, result.insertId]);
-            var result = await selectCustomerData(jwtDataLoad.user_id);
+            var result = await selectUserData(jwtDataLoad.user_id);
 
             if (!result.error) {
                 res.json({ userData: result, "message": "Account created successfully!", session: token });
@@ -59,7 +59,7 @@ router.get('/authenticationToken', async function (req, res, next) {
         try {
 
             var decoded = jwt.decode(token, secret, true);
-            var result = await selectCustomerData(decoded.user_id);
+            var result = await selectUserData(decoded.user_id);
 
             if (!result.error) {
                 res.json({ userData: result });
@@ -106,7 +106,7 @@ router.post('/login', async function (req, res, next) {
         } else {
             jwtDataLoad.user_id = result.user_id;
             var token = jwt.encode(jwtDataLoad, secret);
-            var result = await selectCustomerData(jwtDataLoad.user_id);
+            var result = await selectUserData(jwtDataLoad.user_id);
 
             if (!result.error) {
                 res.json({ userData: result, "message": "Login Success!", session: token });
