@@ -9,7 +9,10 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program",
-            "program": "${workspaceFolder}\\bin\\www"
+            //mac
+            //"program": "${workspaceFolder}/bin/xsquadbackend"
+            //windows
+            "program": "${workspaceFolder}\\bin\\xsquadbackend"
         }
     ]
 }
