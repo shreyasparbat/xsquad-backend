@@ -1,6 +1,5 @@
 {
-    
-        "host" : "xxyu.cbchyieiwxlv.ap-southeast-1.rds.amazonaws.com",
-        "user" : "xxyu",
-        "password" : "123qwe!!"
-    }
+    "host": "159.89.195.107",
+    "user": "admin123",
+    "password": "password123"
+}

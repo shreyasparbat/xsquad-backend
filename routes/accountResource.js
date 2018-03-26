@@ -10,64 +10,46 @@ var config = require('../config.json');
 
 
 var secret = 'xsquad';
+router.post('/createAccount', async function (req, res, next) {
 
-router.post('/fbGoogleAuthentication', async function (req, res, next) {
-
+    var conn = await qp.connectWithTbegin();
     var accountDAO = buildAccountDAO(req.body);
-    accountDAO.login_id = req.body.fb_google_account_id;
-    accountDAO.avatar_file_name = req.body.avatar_file_name;
-    accountDAO.login_token = req.body.token;
-    accountDAO.login_type = req.body.login_type;
 
-    var fb_google_token = req.body.token;
-    var jwtDataLoad = { customer_id: '', token: fb_google_token, login_type: 1, datetime: new Date(), username: accountDAO.username };
+    var jwtDataLoad = {
+        user_id: '',
+        password: accountDAO.password,
+        username: accountDAO.email
+    };
 
     try {
-        // Check if account is axist
-        var result = await qp.executeAndFetchFirstPromise('SELECT * FROM hastedevdb.tbl_customer WHERE login_id = ?; ', req.body.fb_google_account_id);
-
-        // If it doesnot then insert to tbl_customer
-        if (!result) {
-
-            var conn = await qp.connectWithTbegin();
-            var result1 = await qp.executeUpdatePromise('INSERT INTO hastedevdb.tbl_customer SET ?; ', [accountDAO], conn);
-
-            if (result1.length == 0) {
-                var error = new Error('Failed register using facebook authentification');
-                error.status = 406;
-                await qp.rollbackAndCloseConnection(conn);
-                throw error;
-            } else {
-                await qp.commitAndCloseConnection(conn);
-                jwtDataLoad.customer_id = result1.insertId;
-                var token = jwt.encode(jwtDataLoad, secret);
-                // res.json({ "message": "Account created successfully!", session: token });
-                var result = await selectCustomerData(jwtDataLoad.customer_id);
-
-                if (!result.error) {
-                    res.json({ userData: result, "message": "Account created successfully!", session: token });
-                } else {
-                    next(result);
-                }
-            }
-
-        } else { // else do update then login
-            jwtDataLoad.customer_id = result.customer_id;
+        var result = await qp.executeUpdatePromise('insert into ' + config.schema + '.user set ?; ', [accountDAO]);
+        if (result.length == 0) {
+            var error = new Error('Register failed');
+            error.status = 406;
+            throw error;
+        } else {
+            jwtDataLoad.user_id = result.insertId;
             var token = jwt.encode(jwtDataLoad, secret);
-            // res.json({ "message": "Welcome to Haste!", session: token });
-            var result = await selectCustomerData(jwtDataLoad.customer_id);
+            // res.json({ "message": "Account created successfully!", session: token, result: result });
+            await qp.executeUpdatePromise('update ' + config.schema + '.user set login_token = ? where user_id = ?;', [token, result.insertId]);
+            var result = await selectCustomerData(jwtDataLoad.user_id);
 
             if (!result.error) {
-                res.json({ userData: result, "message": "Welcome to Haste!", session: token });
+                res.json({ userData: result, "message": "Account created successfully!", session: token });
             } else {
                 next(result);
             }
         }
 
     } catch (err) {
+        if (err.code == "ER_DUP_ENTRY") {
+            //console.log("here");
+            var error = new Error('Duplicate Entry');
+            error.status = 500;
+            next(error);
+        }
         next(err);
     }
-
 });
 
 router.get('/authenticationToken', async function (req, res, next) {
@@ -77,7 +59,7 @@ router.get('/authenticationToken', async function (req, res, next) {
         try {
 
             var decoded = jwt.decode(token, secret, true);
-            var result = await selectCustomerData(decoded.customer_id);
+            var result = await selectCustomerData(decoded.user_id);
 
             if (!result.error) {
                 res.json({ userData: result });
@@ -102,24 +84,29 @@ router.get('/authenticationToken', async function (req, res, next) {
 });
 
 
-
 router.post('/login', async function (req, res, next) {
-    var username = req.body.username;
-    var password = req.body.password;
+    var email = req.body.email;
+    var password = jwt.encode(req.body.password, secret);
 
-    var jwtDataLoad = { customer_id: '', token: username + username + username + '', login_type: 1, datetime: new Date(), username: username };
+    var jwtDataLoad = {
+        user_id: '',
+        password: password,
+        username: email
+    };
 
     try {
-        var result = await qp.executeAndFetchFirstPromise('select customer_id from  hastedevdb.tbl_customer where username = ? and password = ?; ', [username, password]);
+        var result = await qp.executeAndFetchFirstPromise('select user_id from  ' + config.schema
+            + '.user where email = ? and password = ?; ', [email, password]);
+
         if (result == undefined) {
             var error = new Error('Invalid username or password.');
             error.status = 406;
             throw error;
-        } else {
-            jwtDataLoad.customer_id = result.customer_id;
-            var token = jwt.encode(jwtDataLoad, secret);
 
-            var result = await selectCustomerData(jwtDataLoad.customer_id);
+        } else {
+            jwtDataLoad.user_id = result.user_id;
+            var token = jwt.encode(jwtDataLoad, secret);
+            var result = await selectCustomerData(jwtDataLoad.user_id);
 
             if (!result.error) {
                 res.json({ userData: result, "message": "Login Success!", session: token });
@@ -134,13 +121,13 @@ router.post('/login', async function (req, res, next) {
 });
 
 
-router.post('/profile', async function (req, res, next) {
+router.post('/retrieveProfile', async function (req, res, next) {
     var token = req.body.token;
 
     try {
         var decoded = jwt.decode(token, secret, true);
 
-        var result = await qp.executeAndFetchFirstPromise('SELECT customer_id, email, salutation, username, fullname, firstname, lastname, gender, register_date, account_type, DATE_FORMAT(date_of_birth, "%d/%m/%Y") as "date_of_birth", mobile_no, avatar_file_name, IF(password IS NULL, 0, 1) AS "has_oldPassword" FROM hastedevdb.tbl_customer WHERE customer_id = ?; ', decoded.customer_id);
+        var result = await qp.executeAndFetchFirstPromise('SELECT user_id, email, salutation, username, fullname, firstname, lastname, gender, register_date, account_type, DATE_FORMAT(date_of_birth, "%d/%m/%Y") as "date_of_birth", mobile_no, avatar_file_name, IF(password IS NULL, 0, 1) AS "has_oldPassword" FROM hastedevdb.tbl_customer WHERE user_id = ?; ', decoded.user_id);
         if (result == undefined) {
             var error = new Error('Invalid token.');
             error.status = 406;
@@ -154,8 +141,8 @@ router.post('/profile', async function (req, res, next) {
     }
 });
 
-router.put('/profile', async function (req, res, next) {
-    var customer_id = req.body.customer_id;
+router.put('/editProfile', async function (req, res, next) {
+    var user_id = req.body.user_id;
     var firstname = req.body.firstname;
     var lastname = req.body.lastname;
     var email = req.body.email;
@@ -179,7 +166,7 @@ router.put('/profile', async function (req, res, next) {
 
     try {
 
-        var result = await qp.executeUpdatePromise('UPDATE hastedevdb.tbl_customer SET firstname = ?, lastname = ?, username = ?, email = ?, ' + passString + ' date_of_birth = ?, mobile_no = ?, gender = ? WHERE ' + password + ' AND customer_id = ?; ', [firstname, lastname, username, email, date_of_birth, mobile_no, gender, customer_id]);
+        var result = await qp.executeUpdatePromise('UPDATE hastedevdb.tbl_customer SET firstname = ?, lastname = ?, username = ?, email = ?, ' + passString + ' date_of_birth = ?, mobile_no = ?, gender = ? WHERE ' + password + ' AND user_id = ?; ', [firstname, lastname, username, email, date_of_birth, mobile_no, gender, user_id]);
 
         if (result.affectedRows == 0) {
             var error = new Error('Please check your password again.');
@@ -195,27 +182,24 @@ router.put('/profile', async function (req, res, next) {
 });
 
 function buildAccountDAO(obj) {
+    var password = jwt.encode(obj.password, secret);
     var dao = {
         email: obj.email,
-        salutation: obj.salutation,
-        password: obj.password,
-        username: obj.email,
-        fullname: obj.firstname + " " + obj.lastname,
-        firstname: obj.firstname,
-        lastname: obj.lastname,
+        first_name: obj.first_name,
+        password: password,
+        last_name: obj.last_name,
         gender: obj.gender,
-        register_date: moment().format('YYYY-MM-DD HH:mm:ss'),
-        account_type: 1,
-        date_of_birth: obj.date_of_birth,
-        mobile_no: obj.mobile_no
+        mobile_number: obj.mobile_number
     }
     return dao;
 }
 
-async function selectCustomerData(customer_id) {
+async function selectUserData(user_id) {
     try {
-
-        var result = await qp.executeAndFetchFirstPromise('SELECT customer_id, email, salutation, username, fullname, firstname, lastname, gender, register_date, account_type, date_of_birth, mobile_no, avatar_file_name FROM hastedevdb.tbl_customer WHERE customer_id = ?; ', customer_id);
+        var result = await qp.executeAndFetchFirstPromise('SELECT user_id,'
+            + 'email, first_name, last_name, gender,'
+            + ' mobile_number from ' + config.schema + '.user'
+            + ' WHERE user_id = ?; ', user_id);
         if (result) {
             return result;
         } else {
