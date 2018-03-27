@@ -97,7 +97,7 @@ router.post('/login', async function (req, res, next) {
     try {
         var result = await qp.executeAndFetchFirstPromise('select user_id from  ' + config.schema
             + '.user where email = ? and password = ?; ', [email, password]);
-
+        console.log(result);
         if (result == undefined) {
             var error = new Error('Invalid username or password.');
             error.status = 406;

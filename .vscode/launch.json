@@ -10,9 +10,9 @@
             "request": "launch",
             "name": "Launch Program",
             //mac
-            "program": "${workspaceFolder}/bin/xsquadbackend"
+            //"program": "${workspaceFolder}/bin/xsquadbackend"
             //windows
-            //"program": "${workspaceFolder}\\bin\\xsquadbackend"
+            "program": "${workspaceFolder}\\bin\\xsquadbackend"
         }
     ]
 }
