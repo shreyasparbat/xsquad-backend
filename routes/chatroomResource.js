@@ -4,57 +4,131 @@ var qp = require('flexqp-transaction');
 var moment = require('moment');
 var config = require('../config.json');
 
+//firebase
+var firebase = require('firebase-admin');
+var serviceAccount = require('../resources/serviceAccountKey.json');
+firebase.initializeApp({
+    credential: firebase.credential.cert(serviceAccount),
+    databaseURL: 'https://chatrooms-bb327.firebaseio.com/'
+});
 
 router.post('/findSquad', async function (req, res, next) {
     var user_id = req.body.user_id;
     var activity_id = req.body.activity_id;
 
     try {
-        //get min and max people allowed for an activity
-        var noOfPeople = await qp.executeAndFetchFirstPromise('select minNoOfPeople, maxNoOfPeople from' + config.schema +
-            '.activities where activity_id=?;', [activity_id]);
+        //check if user is already in waitlist or a chatroom for given activiy
+        var chat = await qp.executeAndFetchFirstPromise('select chatroom_id from ' + config.schema +
+            '.chatroom where user_id = ? and activity_id=?;', [user_id, activity_id]);
+        var wait = await qp.executeAndFetchFirstPromise('select * from ' + config.schema +
+            '.waiting_list where user_id = ? and activity_id=?;', [user_id, activity_id]);
 
-        //get max chatroom_id in chatroom table (assumes all chat rooms before this are completely filled)
-        var maxChatRoomId = await qp.executeAndFetchFirstPromise('select max(chatroom_id) from chatroom where activity_id=?;', [activity_id]);
-
-        //get number of people in the max chatroom_id
-        var noOfPeopleInChatroom = await qp.executeAndFetchFirstPromise('select count(user_id) from chatroom where chatroom_id=?', [maxChatRoomId]);
-
-        //no need to add to waiting list
-        if (noOfPeopleInChatroom <= noOfPeople.maxNoOfPeople) {
-            //add user to that chatroom
+        if (chat != null) {
+            res.json({
+                "message": "Already in chatroom"
+            });
+        } else if (wait != null) {
+            res.json({
+                "message": "Already in waiting list"
+            });
         } else {
-            //insert into waitlist
-            var result = await qp.executeAndFetchFirstPromise('insert into ' + config.schema +
-            '.waiting_list values (?, ?); ', [user_id, activity_id]);
 
-            //get number of people in waitlist for a given activity
-            var noOfUsersInWaitlist = await qp.executeAndFetchFirstPromise('select count(user_id) from' + config.schema +
-                '.waiting_list where activity_id=?;', [activity_id]);
+            //get min and max people allowed for an activity
+            var noOfPeople = await qp.executeAndFetchFirstPromise('select minNoOfPeople, maxNoOfPeople from ' + config.schema +
+                '.activities where activity_id=?;', [activity_id]);
 
-            if (noOfUsersInWaitlist >= noOfPeople.minNoOfPeople) {
-                
-            }
-        }
+            //get max chatroom_id in chatroom table (assumes all chat rooms before this are completely filled)
+            var maxChatRoomIdArray = await qp.executeAndFetchPromise('select max(chatroom_id) as max_id from ' + config.schema +
+                '.chatroom where activity_id = ?;', [activity_id]);
+            var maxChatRoomId = maxChatRoomIdArray[0].max_id;
 
-        
-            
-            
-            //create chatroom and notify all users
-            if (!result.error) {
+            //get number of people in the max chatroom_id
+            var noOfPeopleInChatroomArray = await qp.executeAndFetchFirstPromise('select count(user_id) as count_id from ' + config.schema +
+                '.chatroom where chatroom_id=?', [maxChatRoomId]);
+            var noOfPeopleInChatroom = noOfPeopleInChatroomArray.count_id;
+
+            if (maxChatRoomId != null && noOfPeopleInChatroom <= noOfPeople.maxNoOfPeople) {
+                //no need to add to waiting list, return chatroom id
                 res.json({
-                    "noOfUsersInWaitList": result,
-                    "message": "Login Success!"
+                    "chatroom_id": maxChatRoomId,
+                    "message": "Existing chatroom"
                 });
-            
+
+                //update chatroom table
+                await qp.executeAndFetchPromise('insert into ' + config.schema +
+                    '.chatroom values (?, ?, ?); ', [maxChatRoomId, user_id, activity_id]);
+
+            } else {
+                //insert into waitlist
+                var result = await qp.executeAndFetchFirstPromise('insert into ' + config.schema +
+                    '.waiting_list values (?, ?); ', [user_id, activity_id]);
+
+                //get number of people in waitlist for a given activity
+                var noOfUsersInWaitlistArray = await qp.executeAndFetchFirstPromise('select count(*) as count_all from ' + config.schema +
+                    '.waiting_list where activity_id=?;', [activity_id]);
+                var noOfUsersInWaitlist = noOfUsersInWaitlistArray.count_all;
+
+                if (noOfUsersInWaitlist >= noOfPeople.minNoOfPeople) {
+                    //create new chatroom and put all of them in
+                    chatroom_id = maxChatRoomId + 1;
+                    createChatroom(chatroom_id);
+                    res.json({
+                        "chatroom_id": chatroom_id,
+                        "message": "New chatroom"
+                    });
+
+                    try {
+                        //get list of users in waitlist
+                        var wait_list = await qp.executeAndFetchPromise('SELECT user_id, activity_id FROM ' +
+                            config.schema + '.waiting_list where activity_id = ?;', [activity_id]);
+
+                        //insert into chatroom db
+                        for (var row of wait_list) {
+                            await qp.executeUpdatePromise('INSERT INTO ' + config.schema +
+                                '.chatroom values(?, ?, ?);', [chatroom_id, row.user_id, row.activity_id]);
+                        };
+
+                        //delete them from waiting_list
+                        await qp.executeUpdatePromise('delete from ' + config.schema +
+                            '.waiting_list where activity_id=?', [activity_id]);
+                    } catch (err) {
+                        next(err);
+                    }
+
+                } else {
+                    //need to wait
+                    res.json({
+                        "message": "Wait"
+                    });
+                }
+            }
         }
     } catch (error) {
         next(error);
     }
-
-    next(result);
 });
 
+// router.post('/createChatroom', async function (req, res, next) { 
+//     createChatroom(1);
+function createChatroom(chatroom_id) {
 
+    // Get a database reference to our blog
+    var db = firebase.database();
+    var ref = db.ref();
+
+    //inset new node as chatroom_id with a default message from XSquad
+    ref.update({
+        [chatroom_id]: {
+            "createdAt": 1521889319803,
+            text: "Welcome explorers! This chat room is for you all to know each other a little better before you meet, so feel free to introduce yourselves and ease into tomorrow! Have fun!",
+            user: {
+                _id: 0,
+                name: "XSquad"
+            }
+        }
+    });
+    console.log('done');
+}
+// });
 
 module.exports = router;
