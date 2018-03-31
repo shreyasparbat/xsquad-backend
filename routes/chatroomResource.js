@@ -12,6 +12,37 @@ firebase.initializeApp({
     databaseURL: 'https://chatrooms-bb327.firebaseio.com/'
 });
 
+router.post('/loadChatrooms', async function (req, res, next) {
+    var user_id = req.body.user_id;
+
+    try {
+        //get chatroomIDs and activity IDs of all chatrooms this user belongs to
+        var chatrooms = await qp.executeAndFetchPromise('select chatroom_id, activity_name from ' + config.schema +
+            '.chatroom where user_id = ?;', [user_id]);
+
+        var response = setRightFormat(chatrooms);
+        res.json({
+            "rowData": response
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+function setRightFormat(chatrooms) {
+    var response = [];
+    var responseJson = {};
+    for (var row of chatrooms) {
+        responseJson = {
+            activity_name: row.activity_name,
+            chatroom_id: row.chatroom_id,
+        }
+        response.push(responseJson);
+    }
+    return response;
+}
+
 router.post('/findSquad', async function (req, res, next) {
     var user_id = req.body.user_id;
     var activity_id = req.body.activity_id;
@@ -40,23 +71,28 @@ router.post('/findSquad', async function (req, res, next) {
             //get max chatroom_id in chatroom table (assumes all chat rooms before this are completely filled)
             var maxChatRoomIdArray = await qp.executeAndFetchPromise('select max(chatroom_id) as max_id from ' + config.schema +
                 '.chatroom where activity_id = ?;', [activity_id]);
-            var maxChatRoomId = maxChatRoomIdArray[0].max_id;
+            var maxChatRoomIdforThatActivity = maxChatRoomIdArray[0].max_id;
 
             //get number of people in the max chatroom_id
             var noOfPeopleInChatroomArray = await qp.executeAndFetchFirstPromise('select count(user_id) as count_id from ' + config.schema +
-                '.chatroom where chatroom_id=?', [maxChatRoomId]);
+                '.chatroom where chatroom_id=?', [maxChatRoomIdforThatActivity]);
             var noOfPeopleInChatroom = noOfPeopleInChatroomArray.count_id;
 
-            if (maxChatRoomId != null && noOfPeopleInChatroom <= noOfPeople.maxNoOfPeople) {
+            //get global max chat room id (for creating new chatroom)
+            var globalMaxChatRoomIdArray = await qp.executeAndFetchPromise('select max(chatroom_id) as max_id from ' + config.schema +
+                '.chatroom;');
+            var globalMaxChatRoomId = globalMaxChatRoomIdArray[0].max_id;
+
+            if (maxChatRoomIdforThatActivity != null && noOfPeopleInChatroom <= noOfPeople.maxNoOfPeople) {
                 //no need to add to waiting list, return chatroom id
                 res.json({
-                    "chatroom_id": maxChatRoomId,
+                    "chatroom_id": maxChatRoomIdforThatActivity,
                     "message": "Existing chatroom"
                 });
 
                 //update chatroom table
                 await qp.executeAndFetchPromise('insert into ' + config.schema +
-                    '.chatroom values (?, ?, ?); ', [maxChatRoomId, user_id, activity_id]);
+                    '.chatroom values (?, ?, ?); ', [maxChatRoomIdforThatActivity, user_id, activity_id]);
 
             } else {
                 //insert into waitlist
@@ -70,7 +106,7 @@ router.post('/findSquad', async function (req, res, next) {
 
                 if (noOfUsersInWaitlist >= noOfPeople.minNoOfPeople) {
                     //create new chatroom and put all of them in
-                    chatroom_id = maxChatRoomId + 1;
+                    chatroom_id = globalMaxChatRoomId + 1;
                     createChatroom(chatroom_id);
                     res.json({
                         "chatroom_id": chatroom_id,
@@ -82,10 +118,14 @@ router.post('/findSquad', async function (req, res, next) {
                         var wait_list = await qp.executeAndFetchPromise('SELECT user_id, activity_id FROM ' +
                             config.schema + '.waiting_list where activity_id = ?;', [activity_id]);
 
+                        //get activity name
+                        var activity_name = await qp.executeAndFetchPromise('SELECT activity_name as name FROM ' +
+                            config.schema + '.activities where activity_id = ?;', [activity_id]);
+
                         //insert into chatroom db
                         for (var row of wait_list) {
                             await qp.executeUpdatePromise('INSERT INTO ' + config.schema +
-                                '.chatroom values(?, ?, ?);', [chatroom_id, row.user_id, row.activity_id]);
+                                '.chatroom values(?, ?, ?, ?);', [chatroom_id, row.user_id, activity_id, activity_name[0].name]);
                         };
 
                         //delete them from waiting_list
