@@ -2,4 +2,3 @@ node_modules/
 .vscode/launch.json
 privatekey.pem
 publickey.cer
-resources
