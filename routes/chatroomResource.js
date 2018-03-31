@@ -83,6 +83,10 @@ router.post('/findSquad', async function (req, res, next) {
                 '.chatroom;');
             var globalMaxChatRoomId = globalMaxChatRoomIdArray[0].max_id;
 
+            //get activity name
+            var activity_name = await qp.executeAndFetchPromise('SELECT activity_name as name FROM ' +
+                config.schema + '.activities where activity_id = ?;', [activity_id]);
+
             if (maxChatRoomIdforThatActivity != null && noOfPeopleInChatroom <= noOfPeople.maxNoOfPeople) {
                 //no need to add to waiting list, return chatroom id
                 res.json({
@@ -92,7 +96,7 @@ router.post('/findSquad', async function (req, res, next) {
 
                 //update chatroom table
                 await qp.executeAndFetchPromise('insert into ' + config.schema +
-                    '.chatroom values (?, ?, ?); ', [maxChatRoomIdforThatActivity, user_id, activity_id]);
+                    '.chatroom values (?, ?, ?, ?); ', [maxChatRoomIdforThatActivity, user_id, activity_id, activity_name[0].name]);
 
             } else {
                 //insert into waitlist
@@ -117,10 +121,6 @@ router.post('/findSquad', async function (req, res, next) {
                         //get list of users in waitlist
                         var wait_list = await qp.executeAndFetchPromise('SELECT user_id, activity_id FROM ' +
                             config.schema + '.waiting_list where activity_id = ?;', [activity_id]);
-
-                        //get activity name
-                        var activity_name = await qp.executeAndFetchPromise('SELECT activity_name as name FROM ' +
-                            config.schema + '.activities where activity_id = ?;', [activity_id]);
 
                         //insert into chatroom db
                         for (var row of wait_list) {
