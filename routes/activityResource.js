@@ -46,4 +46,48 @@ router.post('/getActivityByID', async function (req, res, next) {
     }
 });
 
+router.post('/insertRSVP', async function (req, res, next) {
+    var rsvp = {
+        activity_id: req.body.activity_id,
+        user_id: req.body.user_id
+    };
+
+    try {
+        var result = await qp.executeAndFetchPromise(`insert into ${config.schema}.rsvp set ?; `, [rsvp]);
+
+        if (result.length == 0 || result == undefined) {
+            var error = new Error('RSVP not added.');
+            error.status = 406;
+            throw error;
+        } else {
+            res.json(result);
+
+        }
+    } catch (err) {
+        next(err);
+    }
+});
+
+router.post('/getRSVP', async function (req, res, next) {
+    var activity_id = req.body.activity_id;
+
+    try {
+        var result = await qp.executeAndFetchPromise(`SELECT rsvp.activity_id, rsvp.user_id,
+            first_name FROM ${config.schema}.rsvp 
+            JOIN ${config.schema}.user on rsvp.user_id = user.user_id 
+            where activity_id = ?;`, activity_id);
+
+        if (result.length == 0 || result == undefined) {
+            var error = new Error('No one has RSVP.');
+            error.status = 406;
+            throw error;
+        } else {
+            res.json(result);
+
+        }
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;
