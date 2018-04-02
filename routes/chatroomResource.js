@@ -20,9 +20,9 @@ router.post('/loadChatrooms', async function (req, res, next) {
         var chatrooms = await qp.executeAndFetchPromise('select chatroom_id, activity_name from ' + config.schema +
             '.chatroom where user_id = ?;', [user_id]);
 
-        var response = setRightFormat(chatrooms);
+        //var response = setRightFormat(chatrooms);
         res.json({
-            "rowData": response
+            "rowData": chatrooms
         });
 
     } catch (error) {
@@ -38,7 +38,7 @@ function setRightFormat(chatrooms) {
             activity_name: row.activity_name,
             chatroom_id: row.chatroom_id,
         }
-        response.push(responseJson);
+        response.add(responseJson);
     }
     return response;
 }
@@ -159,11 +159,13 @@ function createChatroom(chatroom_id) {
     //inset new node as chatroom_id with a default message from XSquad
     ref.update({
         [chatroom_id]: {
-            "createdAt": 1521889319803,
-            text: "Welcome explorers! This chat room is for you all to know each other a little better before you meet, so feel free to introduce yourselves and ease into tomorrow! Have fun!",
-            user: {
-                _id: 0,
-                name: "XSquad"
+            "XSquad": {
+                "createdAt": 1521889319803,
+                text: "Welcome explorers! This chat room is for you all to know each other a little better before you meet, so feel free to introduce yourselves and ease into tomorrow! Have fun!",
+                user: {
+                    _id: 0,
+                    name: "XSquad"
+                }
             }
         }
     });
