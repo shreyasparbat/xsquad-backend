@@ -21,9 +21,7 @@ router.post('/loadChatrooms', async function (req, res, next) {
             '.chatroom where user_id = ?;', [user_id]);
 
         //var response = setRightFormat(chatrooms);
-        res.json({
-            "rowData": chatrooms
-        });
+        res.json(chatrooms);
 
     } catch (error) {
         next(error);
