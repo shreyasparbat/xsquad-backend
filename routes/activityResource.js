@@ -77,14 +77,10 @@ router.post('/getRSVP', async function (req, res, next) {
             JOIN ${config.schema}.user on rsvp.user_id = user.user_id 
             where activity_id = ?;`, activity_id);
 
-        if (result.length == 0 || result == undefined) {
-            var error = new Error('No one has RSVP.');
-            error.status = 406;
-            throw error;
-        } else {
-            res.json(result);
 
-        }
+        res.json(result);
+
+
     } catch (err) {
         next(err);
     }
