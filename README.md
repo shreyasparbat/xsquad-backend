@@ -1,3 +1,2 @@
 # XSquad-Backend
-The back end code of an app I'm building for my startup.
-Now available on the IOS App store and Google Play Store!
+App is now live on the IOS App store and Google Play Store!
