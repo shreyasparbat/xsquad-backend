@@ -13,7 +13,7 @@
     "debug": "~2.6.3",
     "express": "~4.15.2",
     "firebase": "^4.12.1",
-    "firebase-admin": "^5.11.0",
+    "firebase-admin": "^11.4.1",
     "flexqp-transaction": "^0.3.2",
     "generate-password": "^1.3.0",
     "google-auth-library": "^0.12.0",
